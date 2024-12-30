@@ -212,6 +212,24 @@ resource "aws_iam_policy" "ecs_execution_role_policy" {
     Version = "2012-10-17"
     Statement = [
       {
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:GetRepositoryPolicy",
+          "ecr:DescribeRepositories",
+          "ecr:ListImages",
+          "ecr:DescribeImages",
+          "ecr:BatchGetImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage"
+        ]
+        Resource = "*"
+        Effect   = "Allow"
+      },
+      {
         Effect = "Allow"
         Action = [
           "logs:CreateLogStream",
@@ -243,8 +261,8 @@ resource "aws_ecs_task_definition" "this" {
   container_definitions    = <<EOL
 [
     {
-        "name": "nginx",
-        "image": "public.ecr.aws/nginx/nginx:latest",
+        "name": "terraform_slack_notification",
+        "image": "${var.docker_image_in_ecr}",
         "logConfiguration": {
           "logDriver": "awslogs",
           "options": {
@@ -255,8 +273,8 @@ resource "aws_ecs_task_definition" "this" {
         },
         "portMappings": [
             {
-                "containerPort": 80,
-                "hostPort": 80
+                "containerPort": 3000,
+                "hostPort": 3000 
             }
         ]
     }
@@ -271,7 +289,7 @@ resource "aws_ecs_cluster" "this" {
 resource "aws_lb_target_group" "this" {
   name        = "${var.application_name}-tgp"
   vpc_id      = aws_vpc.this.id
-  port        = 80
+  port        = 3000
   protocol    = "HTTP"
   target_type = "ip"
   health_check {
@@ -313,8 +331,8 @@ resource "aws_security_group" "ecs" {
 resource "aws_security_group_rule" "esc_sgr_rule" {
   security_group_id = aws_security_group.ecs.id
   type              = "ingress"
-  from_port         = 80
-  to_port           = 80
+  from_port         = 3000
+  to_port           = 3000
   protocol          = "tcp"
   cidr_blocks       = ["10.0.0.0/16"]
 }
@@ -333,8 +351,8 @@ resource "aws_ecs_service" "this" {
 
   load_balancer {
     target_group_arn = aws_lb_target_group.this.arn
-    container_name   = "nginx"
-    container_port   = 80
+    container_name   = "terraform_slack_notification"
+    container_port   = 3000
   }
 }
 

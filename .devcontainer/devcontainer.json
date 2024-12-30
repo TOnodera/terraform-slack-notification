@@ -14,7 +14,7 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"esbenp.prettier-vscode"
+				"esbenp.prettier-vscode","hashicorp.terraform"
 			],
 			"settings": {
 				"[typescript]": {
