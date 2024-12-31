@@ -364,3 +364,96 @@ resource "aws_cloudwatch_log_group" "terraform_slack_notification" {
   retention_in_days = 30
 }
 
+
+/**
+ * lambda role
+ */
+resource "aws_iam_role" "lambda_role" {
+  name = "lambdaRole"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = [
+            "lambda.amazonaws.com",
+            "logs.amazonaws.com"
+          ]
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "lambda_log_policy" {
+  name = "cloud-watch-logs-policy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:PutSubscriptionFilter"
+        ],
+        Resource = "arn:aws:logs:*:*:*",
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "lambda:InvokeFunction"
+        ],
+        Resource = aws_lambda_function.cloud_watch_to_slack.arn
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "sns:Publish"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_log_policy_attach" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_log_policy.arn
+}
+
+/**
+ * Lambda Function
+ */
+resource "aws_lambda_function" "cloud_watch_to_slack" {
+  function_name = "cloudwatch-to-slack"
+  filename      = "${path.module}/lambda_functions/function.zip"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "lambda_functions/function.lambda_handler"
+  runtime       = "python3.9"
+
+  environment {
+    variables = {
+      SLACK_WEBHOOK_URL = var.slack_webhook_url
+    }
+  }
+
+  source_code_hash = filebase64sha512("${path.module}/lambda_functions/function.zip")
+}
+
+resource "aws_cloudwatch_log_subscription_filter" "log_to_sns_filter" {
+  name            = "terraform_slack_notification_sns"
+  log_group_name  = aws_cloudwatch_log_group.terraform_slack_notification.name
+  filter_pattern  = ""
+  destination_arn = aws_lambda_function.cloud_watch_to_slack.arn
+}
+
+resource "aws_lambda_permission" "lambda_permission" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.cloud_watch_to_slack.function_name
+  principal     = "logs.amazonaws.com"
+  source_arn    = "${aws_cloudwatch_log_group.terraform_slack_notification.arn}:*"
+}

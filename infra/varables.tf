@@ -11,3 +11,7 @@ variable "application_name" {
 variable "docker_image_in_ecr" {
   type = string
 }
+
+variable "slack_webhook_url" {
+  type = string
+}
